@@ -118,6 +118,65 @@ def load(
     return vlm
 
 
+# === Fallback: Load Fresh VLM from Registry (no checkpoint) ===
+def load_or_initialize_vlm(
+    model_id_or_path: Union[str, Path],
+    hf_token: Optional[str] = None,
+    cache_dir: Optional[Union[str, Path]] = None,
+    load_for_training: bool = False,
+) -> PrismaticVLM:
+    """
+    Loads a pretrained PrismaticVLM from checkpoint if available, otherwise initializes a fresh VLM from registry.
+    
+    This is a convenience wrapper around `load()` that provides a fallback: if a checkpoint cannot be found,
+    it will try to instantiate a fresh VLM using registered model configurations from ModelConfig registry.
+    """
+    try:
+        return load(model_id_or_path, hf_token=hf_token, cache_dir=cache_dir, load_for_training=load_for_training)
+    except (AssertionError, ValueError) as e:
+        # Fallback: Try to find in ModelConfig registry and instantiate fresh VLM
+        model_id_str = str(model_id_or_path)
+        try:
+            model_cfg = ModelConfig.get_choice_class(model_id_str)()
+            overwatch.info(
+                f"Checkpoint not found for `{model_id_str}`; instantiating fresh VLM from registered config"
+            )
+
+            # Load Vision Backbone
+            overwatch.info(f"Loading Vision Backbone [bold]{model_cfg.vision_backbone_id}[/]")
+            vision_backbone, image_transform = get_vision_backbone_and_transform(
+                model_cfg.vision_backbone_id,
+                model_cfg.image_resize_strategy,
+            )
+
+            # Load LLM Backbone
+            overwatch.info(f"Loading Pretrained LLM [bold]{model_cfg.llm_backbone_id}[/] via HF Transformers")
+            llm_backbone, tokenizer = get_llm_backbone_and_tokenizer(
+                model_cfg.llm_backbone_id,
+                llm_max_length=model_cfg.llm_max_length,
+                hf_token=hf_token,
+                inference_mode=not load_for_training,
+            )
+
+            # Create fresh VLM without loading checkpoint
+            from prismatic.models.materialize import get_vlm
+            overwatch.info(f"Instantiating fresh VLM [bold blue]{model_cfg.model_id}[/]")
+            vlm = get_vlm(
+                model_cfg.model_id,
+                model_cfg.arch_specifier,
+                vision_backbone,
+                llm_backbone,
+                enable_mixed_precision_training=True,
+            )
+
+            return vlm
+        except Exception:
+            raise ValueError(
+                f"Model `{model_id_str}` not found as checkpoint path/HF Hub repo or in ModelConfig registry. "
+                f"Available models in ModelConfig: {[attr for attr in dir(ModelConfig) if not attr.startswith('_')]}"
+            )
+
+
 # === Load Pretrained VLA Model ===
 def load_vla(
     model_id_or_path: Union[str, Path],
@@ -210,6 +269,12 @@ def load_vla(
     # Create Action Tokenizer
     action_tokenizer = ActionTokenizer(llm_backbone.get_tokenizer())
 
+    # Create Proprio Tokenizer (optional, only if proprio stats exist)
+    from prismatic.vla.proprio_tokenizer import ProprioTokenizer
+    proprio_tokenizer = None
+    if norm_stats and any("proprio" in stats for stats in norm_stats.values()):
+        proprio_tokenizer = ProprioTokenizer(llm_backbone.get_tokenizer(), bins=256, token_begin_idx=31000)
+
     # Load VLM using `from_pretrained` (clobbers HF syntax... eventually should reconcile)
     overwatch.info(f"Loading VLA [bold blue]{model_cfg.model_id}[/] from Checkpoint")
     vla = OpenVLA.from_pretrained(
@@ -221,6 +286,7 @@ def load_vla(
         freeze_weights=not load_for_training,
         norm_stats=norm_stats,
         action_tokenizer=action_tokenizer,
+        proprio_tokenizer=proprio_tokenizer,
     )
 
     return vla
