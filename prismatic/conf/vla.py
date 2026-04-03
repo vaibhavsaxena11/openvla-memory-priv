@@ -198,6 +198,44 @@ class Exp_SigLIP_224px_Droid_Wipe(Exp_SigLIP_224px_Bridge):
     data_mix: str = "droid_wipe"
 
 
+# === Qwen-based VLA Configurations ===
+
+
+# = [8 GPU] Qwen2.5 0.5B DinoSigLIP 224px Base Config =
+@dataclass
+class Exp_Qwen25_DinoSigLIP_224px_0_5B(Exp_SigLIP_224px_Bridge):
+    vla_id: str = "prism-qwen25-dinosiglip-224px+0_5b"
+    base_vlm: Union[str, Path] = "prism-qwen25-dinosiglip-224px+0_5b"
+
+    data_mix: str = None
+    data_format: str = "hdf5"
+
+    expected_world_size: int = 8
+    global_batch_size: int = 256
+    per_device_batch_size: int = 32
+
+
+# = [8 GPU] Qwen2.5 0.5B DinoSigLIP 224px with Extra Tokens =
+@dataclass
+class Exp_Qwen25_DinoSigLIP_224px_0_5B_Extra(Exp_Qwen25_DinoSigLIP_224px_0_5B):
+    vla_id: str = "prism-qwen25-extra-dinosiglip-224px+0_5b"
+    base_vlm: Union[str, Path] = "prism-qwen25-extra-dinosiglip-224px+0_5b"
+
+
+# = [8 GPU] Qwen2.5 0.5B DinoSigLIP 224px + Bridge =
+@dataclass
+class Exp_Qwen25_DinoSigLIP_224px_0_5B_Bridge(Exp_Qwen25_DinoSigLIP_224px_0_5B_Extra):
+    vla_id: str = "prism-qwen25-dinosiglip-224px+0_5b+mx-bridge"
+    data_mix: str = "bridge"
+
+
+# = [8 GPU] Qwen2.5 0.5B DinoSigLIP 224px + OXE Magic Soup =
+@dataclass
+class Exp_Qwen25_DinoSigLIP_224px_0_5B_OXE_Magic_Soup(Exp_Qwen25_DinoSigLIP_224px_0_5B_Extra):
+    vla_id: str = "prism-qwen25-dinosiglip-224px+0_5b+mx-oxe-magic-soup"
+    data_mix: str = "oxe_magic_soup"
+
+
 # === Define a VLA Registry Enum for Reference & Validation ===
 @unique
 class VLARegistry(Enum):
@@ -224,6 +262,12 @@ class VLARegistry(Enum):
 
     # === DROID Fine-tuning Configs ===
     SIGLIP_224PX_MX_DROID_WIPE = Exp_SigLIP_224px_Droid_Wipe
+
+    # === Qwen-based VLA Configs ===
+    QWEN25_DINOSIGLIP_224PX_0_5B = Exp_Qwen25_DinoSigLIP_224px_0_5B
+    QWEN25_DINOSIGLIP_224PX_0_5B_EXTRA = Exp_Qwen25_DinoSigLIP_224px_0_5B_Extra
+    QWEN25_DINOSIGLIP_224PX_0_5B_BRIDGE = Exp_Qwen25_DinoSigLIP_224px_0_5B_Bridge
+    QWEN25_DINOSIGLIP_224PX_0_5B_OXE_MAGIC_SOUP = Exp_Qwen25_DinoSigLIP_224px_0_5B_OXE_Magic_Soup
 
     @property
     def vla_id(self) -> str:
